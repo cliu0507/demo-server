@@ -7,6 +7,9 @@ API server
 * follow the instruction to fill in information to create package.json
 * install dependencies
     * npm install express --save
+    * npm install multer
+    * npm install cors
+
 
 ## Installation (Clone/Fork/Checkout)
 * make sure cd to ./demo-server folder
