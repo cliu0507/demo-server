@@ -20,6 +20,8 @@
   },
   "homepage": "https://github.com/cliu0507/demo-server#readme",
   "dependencies": {
-    "express": "^4.17.1"
+    "cors": "^2.8.5",
+    "express": "^4.17.1",
+    "multer": "^1.4.2"
   }
 }

@@ -13,4 +13,5 @@ API server
 
 ## Installation (Clone/Fork/Checkout)
 * make sure cd to ./demo-server folder
+* sudo apt-get install nodejs npm (if no nodejs installed)
 * npm install 
