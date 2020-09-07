@@ -56,6 +56,7 @@ app.post('/upload', upload.single('myfile'), function(req, res){
             channel.assertQueue(queue, {
                 durable: false
             });
+            console.log(JSON.stringify(msg))
             // send to mq
             channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)));
             logger.log({
