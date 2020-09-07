@@ -35,7 +35,7 @@ app.post('/upload', upload.single('myfile'), function(req, res){
         }
         logger.log({
             level:'info',
-            message: 'Connection to queue built!'
+            message: 'Connection to queue %c built!'
         })
         connection.createChannel(function(error1,channel){
             if (error1){
@@ -46,11 +46,18 @@ app.post('/upload', upload.single('myfile'), function(req, res){
                 message: 'Connection to channel built!'
             })
             var queue = queueName
-            var msg = req.file.path
+            var msg = {
+                'filepath': req.file.path,
+                'destination': req.file.destination,
+                'mimetype':req.file.mimetype,
+                'originalname':req.file.originalname
+            }
+            req.file.path
             channel.assertQueue(queue, {
                 durable: false
             });
-            channel.sendToQueue(queue, Buffer.from(msg));
+            // send to mq
+            channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)));
             logger.log({
                 level:'info',
                 message: 'Job message sent!'
