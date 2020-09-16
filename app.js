@@ -52,7 +52,8 @@ app.post('/upload', upload.single('myfile'), function(req, res){
                 'mimetype':req.file.mimetype,
                 'originalname':req.file.originalname
             }
-            req.file.path
+            var fullpath = __dirname + '/' + req.file.path  //get absolute path of file
+            msg['filepath'] = fullpath // update msg object with absolute path
             channel.assertQueue(queue, {
                 durable: false
             });
