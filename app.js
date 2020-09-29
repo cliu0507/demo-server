@@ -5,10 +5,19 @@ var upload = multer({ dest: 'uploads/' });
 var app = express()
 var amqp = require('amqplib/callback_api');
 var winston = require('winston')
-var queueName = 'workflow1'
+const { v1: uuidv1 } = require('uuid');
 
 
-//create logger
+// set variables for message queue
+const queueName = 'demo-queue'
+
+// set variables for mongodb client
+const MongoClient = require('mongodb').MongoClient;
+const url = 'mongodb://localhost:27017';
+const dbName = 'demo';
+const collectionName = 'jobStatus'
+
+// create logger
 var logger = winston.createLogger({
   transports: [
     new winston.transports.Console(),
@@ -17,25 +26,85 @@ var logger = winston.createLogger({
 });
 
 
-
+// handle cors
 app.use('/', cors())
 
+// isit up
 app.get('/isitup', function(req, res){
     res.send('itisup');
 })
 
+// post upload
 app.post('/upload', upload.single('myfile'), function(req, res){
     logger.log({
         level:'info',
-        message: 'Multipart post call received!'
+        message: 'Success: multipart post call received!'
     })
+
+    //set variables for this job
+    var filePath = req.file.path
+    var destination = req.file.destination
+    var mimeType = req.file.mimetype
+    var originalName = req.file.originalname
+
+    //make database record
+    var jobId = uuidv1()
+    var record = {
+        "jobId": jobId,
+        "jobStatus": 'created',
+        "queueName": queueName,
+        "filePath": filePath,
+        "mimeType": mimeType,
+        "originalname": originalName
+    }
+    //connect to database
+    MongoClient.connect(url, function(err, client){
+        if (err){
+            logger.log({
+                level:"info",
+                message: "Error: connection to MongoDB failed!"
+            })
+            throw err;
+        }
+        var dbo = client.db(dbName)
+        dbo.collection(collectionName).insertOne(record, function(err,res){
+            if(err){
+                logger.log({
+                    level:"info",
+                    message: "Error: insert to DB failed!"
+                })
+            }
+            logger.log({
+                level:"info",
+                message: "Success: new job created on DB!"
+            })
+            client.close()
+            logger.log({
+                level:"info",
+                message: "Success: connection to DB closed"
+            })
+        })
+    })
+
+
+    //make msg for message queue
+    var queue = queueName
+    var msg = {
+        'jobId': jobId,
+        'filePath': filePath,
+        'destination': destination,
+        'mimeType':mimeType,
+        'originalName':originalName
+        }
+    
+    //connect to message queue
     amqp.connect('amqp://localhost', function(error0, connection){
         if (error0){
             throw error0
         }
         logger.log({
             level:'info',
-            message: 'Connection to queue %c built!'
+            message: 'Success: connection to queue %c built!'
         })
         connection.createChannel(function(error1,channel){
             if (error1){
@@ -43,17 +112,11 @@ app.post('/upload', upload.single('myfile'), function(req, res){
             }
             logger.log({
                 level:'info',
-                message: 'Connection to channel built!'
+                message: 'Success: connection to channel built!'
             })
-            var queue = queueName
-            var msg = {
-                'filepath': req.file.path,
-                'destination': req.file.destination,
-                'mimetype':req.file.mimetype,
-                'originalname':req.file.originalname
-            }
+            
             var fullpath = __dirname + '/' + req.file.path  //get absolute path of file
-            msg['filepath'] = fullpath // update msg object with absolute path
+            msg['filePath'] = fullpath // update msg object with absolute path
             channel.assertQueue(queue, {
                 durable: false
             });
@@ -62,28 +125,29 @@ app.post('/upload', upload.single('myfile'), function(req, res){
             channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)));
             logger.log({
                 level:'info',
-                message: 'Job message sent!'
+                message: 'Success: job message sent to MQ!'
             });
             logger.log({
                 level:'info',
-                message: 'Message is \''.concat(msg.toString()).concat('\'')
+                message: 'Success: message is \''.concat(msg.toString()).concat('\'')
             });
 
         })
         setTimeout(function() {
             logger.log({
                 level:'info',
-                message: 'Connection to queue closed!'
+                message: 'Success: connection to queue closed!'
             })
             connection.close();
             //process.exit(0);
-        }, 500);
+        }, 100);
 
     });
     console.log('Body- ' + JSON.stringify(req.body));
     res.send('uploaded')
 })
 
+// register http server
 var server = app.listen(8081, function(){
     var host = server.address().address
     var port = server.address().port
