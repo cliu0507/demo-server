@@ -52,14 +52,7 @@ app.post('/upload', upload.single('myfile'), function(req, res){
 
     //make database record
     var jobId = uuidv1()
-    var record = {
-        "jobId": jobId,
-        "jobStatus": 'created',
-        "queueName": queueName,
-        "filePath": filePath,
-        "mimeType": mimeType,
-        "originalname": originalName
-    }
+    
     //connect to database
     MongoClient.connect(url, function(err, client){
         if (err){
@@ -70,14 +63,34 @@ app.post('/upload', upload.single('myfile'), function(req, res){
             throw err;
         }
         var dbo = client.db(dbName)
+        var record = {
+            "jobId": jobId,
+            "jobStatus": 'created',
+            "queueName": queueName,
+            "filePath": filePath,
+            "mimeType": mimeType,
+            "originalname": originalName
+        }
+
+        dbo.collection(collectionName).insertOne(record, function(err,res){
+            if(err){
+                logger.log({
+                    level:"info",
+                    message: "Error: insert to DB failed!"
+                })
+            }
+            logger.log({
+                level:"info",
+                message: "Success: new job created on DB!"
+            })    
+        })
+
         var bucket = new mongodb.GridFSBucket(dbo)
         var newFileName = jobId + '_file'
         var stream = bucket.openUploadStream(newFileName)
         var objectId = stream.id // file object id on gridfs
         
-        record.newFileName = newFileName
-        record.objectId = objectId.toString()
-
+        
         // upload file to GridFS
         fs.createReadStream(filePath).pipe(stream).
         on('error', function(error){
@@ -89,8 +102,13 @@ app.post('/upload', upload.single('myfile'), function(req, res){
                 message: "Success: file uploaded to GridFS"
             })
             
-            // insert record to database
-            dbo.collection(collectionName).insertOne(record, function(err,res){
+            // update record to database
+            record.newFileName = newFileName
+            record.objectId = objectId.toString()
+            record.jobStatus = 'uploaded'
+            var query = {jobId: jobId}
+            var newRecord = { $set: record };
+            dbo.collection(collectionName).updateOne(query, newRecord, function(err,res){
                 if(err){
                     logger.log({
                         level:"info",
@@ -146,7 +164,7 @@ app.post('/upload', upload.single('myfile'), function(req, res){
             channel.assertQueue(queue, {
                 durable: false
             });
-            console.log(JSON.stringify(msg))
+            
             // send to mq
             channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)));
             logger.log({
@@ -169,7 +187,7 @@ app.post('/upload', upload.single('myfile'), function(req, res){
         }, 100);
 
     });
-    console.log('Body- ' + JSON.stringify(req.body));
+    //console.log('Body- ' + JSON.stringify(req.body));
     res.send('uploaded')
 })
 
@@ -177,5 +195,6 @@ app.post('/upload', upload.single('myfile'), function(req, res){
 var server = app.listen(8081, function(){
     var host = server.address().address
     var port = server.address().port
+    
     console.log("app listening at http://%s:%s", host, port)
 })
