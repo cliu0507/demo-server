@@ -6,13 +6,16 @@ var app = express()
 var amqp = require('amqplib/callback_api');
 var winston = require('winston')
 const { v1: uuidv1 } = require('uuid');
-
+const mongodb = require('mongodb')
+const fs = require('fs');
+const { ifError } = require('assert');
+const { assert } = require('console');
 
 // set variables for message queue
 const queueName = 'demo-queue'
 
 // set variables for mongodb client
-const MongoClient = require('mongodb').MongoClient;
+const MongoClient = mongodb.MongoClient;
 const url = 'mongodb://localhost:27017';
 const dbName = 'demo';
 const collectionName = 'jobStatus'
@@ -67,23 +70,46 @@ app.post('/upload', upload.single('myfile'), function(req, res){
             throw err;
         }
         var dbo = client.db(dbName)
-        dbo.collection(collectionName).insertOne(record, function(err,res){
-            if(err){
-                logger.log({
-                    level:"info",
-                    message: "Error: insert to DB failed!"
-                })
-            }
+        var bucket = new mongodb.GridFSBucket(dbo)
+        var newFileName = jobId + '_file'
+        var stream = bucket.openUploadStream(newFileName)
+        var objectId = stream.id // file object id on gridfs
+        
+        record.newFileName = newFileName
+        record.objectId = objectId.toString()
+
+        // upload file to GridFS
+        fs.createReadStream(filePath).pipe(stream).
+        on('error', function(error){
+            assert.ifError(error)
+        }).
+        on('finish', function(){
             logger.log({
                 level:"info",
-                message: "Success: new job created on DB!"
+                message: "Success: file uploaded to GridFS"
             })
+            
+            // insert record to database
+            dbo.collection(collectionName).insertOne(record, function(err,res){
+                if(err){
+                    logger.log({
+                        level:"info",
+                        message: "Error: insert to DB failed!"
+                    })
+                }
+                logger.log({
+                    level:"info",
+                    message: "Success: new job created on DB!"
+                })    
+            })
+
             client.close()
             logger.log({
                 level:"info",
                 message: "Success: connection to DB closed"
             })
         })
+
     })
 
 
