@@ -88,7 +88,7 @@ app.post('/upload', upload.single('myfile'), function(req, res){
         var bucket = new mongodb.GridFSBucket(dbo)
         var newFileName = jobId + '_file'
         var stream = bucket.openUploadStream(newFileName)
-        var objectId = stream.id // file object id on gridfs
+        var fileId = stream.id // file object id on gridfs
         
         
         // upload file to GridFS
@@ -104,7 +104,7 @@ app.post('/upload', upload.single('myfile'), function(req, res){
             
             // update record to database
             record.newFileName = newFileName
-            record.objectId = objectId.toString()
+            record.fileId = fileId.toString()
             record.jobStatus = 'uploaded'
             var query = {jobId: jobId}
             var newRecord = { $set: record };
