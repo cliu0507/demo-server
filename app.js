@@ -188,7 +188,10 @@ app.post('/upload', upload.single('myfile'), function(req, res){
 
     });
     //console.log('Body- ' + JSON.stringify(req.body));
-    res.send('uploaded')
+
+    //send response
+    res.setHeader("Content-Type","application/json");
+    res.send(jobId)
 })
 
 // get status/result
