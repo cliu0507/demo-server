@@ -8,6 +8,7 @@ var winston = require('winston')
 const { v1: uuidv1 } = require('uuid');
 const mongodb = require('mongodb')
 const fs = require('fs');
+var path = require('path');
 const { ifError } = require('assert');
 const { assert } = require('console');
 
@@ -204,7 +205,7 @@ app.get('/status/:id', function(req,res){
 
     let id = req.params.id;
     // connect to databse
-    MongoClient.connect(url, function(err,client){
+    MongoClient.connect(url, { useUnifiedTopology: true }, function(err,client){
         if (err){
             logger.log({
                 level: "info",
@@ -214,6 +215,7 @@ app.get('/status/:id', function(req,res){
         }
         var dbo = client.db(dbName);
         var query = {"jobId": id}
+        
         // query the result
         dbo.collection(collectionName).findOne(query,function(err, result){
             if(err){
@@ -222,7 +224,7 @@ app.get('/status/:id', function(req,res){
                     message: "Error: can not find job id in MongoDB"
                 })            
             }
-            client.close()
+            
             let returnRes = {
                 "jobId": result["jobId"],
                 "mimeType": result["mimeType"],
@@ -231,8 +233,45 @@ app.get('/status/:id', function(req,res){
                 "fileId": result["fileId"],
                 "jobStatus": result["jobStatus"],
             }
-            res.setHeader("Content-Type","application/json");
-            res.send(returnRes)
+
+            if("resultFileId" in result){
+
+                // create folder to store result file
+                let downloadDir = path.join(process.cwd(),'downloads',id)
+                if (!fs.existsSync(downloadDir)){
+                    fs.mkdirSync(downloadDir)
+                }
+
+                // download the result file
+                let resultFilePath = path.join(downloadDir,id+'_result')
+                var bucket = new mongodb.GridFSBucket(dbo)
+                var resultFileId = result["resultFileId"]
+                bucket.openDownloadStream(new mongodb.ObjectId(resultFileId))
+                .pipe(fs.createWriteStream(resultFilePath)).
+                on('error',function(error){
+                    logger.log({
+                        level: "info",
+                        message: "Error: failed to download result file"
+                    })
+                    res.status(500)
+                    res.send('failed to download result file')
+                    client.close()
+                }).
+                on('finish', function(){
+                    // respond to client
+                    res.setHeader("Content-Type","application/json");
+                    res.send(returnRes)
+                    client.close()
+                })
+            }
+            else
+            {
+                // respond to client
+                res.setHeader("Content-Type","application/json");
+                res.send(returnRes)
+                client.close()
+            }
+            
             logger.log({
                 level: "info",
                 message: 'Success: ----- status call completed! -----'
