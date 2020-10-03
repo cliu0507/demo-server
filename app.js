@@ -218,10 +218,12 @@ app.get('/status/:id', function(req,res){
                     message: "Error: can not find job id in MongoDB"
                 })            
             }
-            
-            console.log(result)
             client.close()
             res.send(result)
+            logger.log({
+                level: "info",
+                message: "Success: return status call response 200"
+            })
         })
     })
     
