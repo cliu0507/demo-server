@@ -191,6 +191,43 @@ app.post('/upload', upload.single('myfile'), function(req, res){
     res.send('uploaded')
 })
 
+// get status/result
+app.get('/status/:id', function(req,res){
+    logger.log({
+        level:'info',
+        message: 'Success: status get call received!'
+    })
+
+    let id = req.params.id;
+    // connect to databse
+    MongoClient.connect(url, function(err,client){
+        if (err){
+            logger.log({
+                level: "info",
+                message: "Error: connection to MongoDB failed"
+            })
+            throw err;
+        }
+        var dbo = client.db(dbName);
+        var query = {"jobId": id}
+        // query the result
+        dbo.collection(collectionName).findOne(query,function(err, result){
+            if(err){
+                logger.log({
+                    level: "info",
+                    message: "Error: can not find job id in MongoDB"
+                })            
+            }
+            
+            console.log(result)
+            client.close()
+            res.send(result)
+        })
+    })
+    
+
+})
+
 // register http server
 var server = app.listen(8081, function(){
     var host = server.address().address
