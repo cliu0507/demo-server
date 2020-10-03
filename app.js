@@ -225,7 +225,7 @@ app.get('/status/:id', function(req,res){
             client.close()
             let returnRes = {
                 "jobId": result["jobId"],
-                "mimeType": result["jobId"],
+                "mimeType": result["mimeType"],
                 "originalName" : result["originalName"],
                 "jobStatus": result["jobStatus"]
             }
