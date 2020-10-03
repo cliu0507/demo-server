@@ -227,7 +227,9 @@ app.get('/status/:id', function(req,res){
                 "jobId": result["jobId"],
                 "mimeType": result["mimeType"],
                 "originalName" : result["originalName"],
-                "jobStatus": result["jobStatus"]
+                "resultFileId": result["resultFileId"],
+                "fileId": result["fileId"],
+                "jobStatus": result["jobStatus"],
             }
             res.setHeader("Content-Type","application/json");
             res.send(returnRes)
