@@ -214,7 +214,7 @@ app.get('/status/:id', function(req,res){
     let jobId = req.params.id;
     console.log(jobId)
     console.log(typeof(jobId))
-    if(jobId == 'undefined' || jobStatus == undefined){
+    if(jobId == 'undefined' || jobId == undefined){
         res.status(400)
         res.send('empty job id was provided')
         return   
