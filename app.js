@@ -5,6 +5,7 @@ var upload = multer({ dest: 'uploads/' });
 var app = express()
 var amqp = require('amqplib/callback_api');
 var winston = require('winston')
+var FormData = require('form-data');
 const { v1: uuidv1 } = require('uuid');
 const mongodb = require('mongodb')
 const fs = require('fs');
@@ -30,6 +31,13 @@ var logger = winston.createLogger({
 });
 
 
+function base64_encode(file) {
+    // read binary data
+    var bitmap = fs.readFileSync(file);
+    // convert binary data to base64 encoded string
+    return new Buffer(bitmap).toString('base64');
+}
+
 // handle cors
 app.use('/', cors())
 
@@ -53,7 +61,7 @@ app.post('/upload', upload.single('myfile'), function(req, res){
 
     //make database record
     var jobId = uuidv1()
-    
+
     //connect to database
     MongoClient.connect(url, {useUnifiedTopology: true}, function(err, client){
         if (err){
@@ -203,7 +211,15 @@ app.get('/status/:id', function(req,res){
         message: 'Success: ----- status get call received! -----'
     })
 
-    let id = req.params.id;
+    let jobId = req.params.id;
+    console.log(jobId)
+    console.log(typeof(jobId))
+    if(jobId == 'undefined' || jobStatus == undefined){
+        res.status(400)
+        res.send('empty job id was provided')
+        return   
+    }
+
     // connect to databse
     MongoClient.connect(url, { useUnifiedTopology: true }, function(err,client){
         if (err){
@@ -214,7 +230,7 @@ app.get('/status/:id', function(req,res){
             throw err;
         }
         var dbo = client.db(dbName);
-        var query = {"jobId": id}
+        var query = {"jobId": jobId}
         
         // query the result
         dbo.collection(collectionName).findOne(query,function(err, result){
@@ -234,16 +250,23 @@ app.get('/status/:id', function(req,res){
                 "jobStatus": result["jobStatus"],
             }
 
+            // formulate a multipart response
+            var form = new FormData()
+            form.append('jobId', jobId);
+            form.append('jobStatus',result['jobStatus']);
+            
+            // check if result file is ready
             if("resultFileId" in result){
+                // if result is ready, attach base64 result in multipart response
 
                 // create folder to store result file
-                let downloadDir = path.join(process.cwd(),'downloads',id)
+                let downloadDir = path.join(process.cwd(),'downloads',jobId)
                 if (!fs.existsSync(downloadDir)){
                     fs.mkdirSync(downloadDir)
                 }
 
                 // download the result file
-                let resultFilePath = path.join(downloadDir,id+'_result')
+                let resultFilePath = path.join(downloadDir,jobId+'_result')
                 var bucket = new mongodb.GridFSBucket(dbo)
                 var resultFileId = result["resultFileId"]
                 bucket.openDownloadStream(new mongodb.ObjectId(resultFileId))
@@ -259,15 +282,21 @@ app.get('/status/:id', function(req,res){
                 }).
                 on('finish', function(){
                     // respond to client
-                    res.setHeader("Content-Type","application/json");
-                    res.send(returnRes)
+                    var base64str = base64_encode(resultFilePath)
+                    form.append('resultFileBase64', base64str);
+                    //form.append('part2', 'part 2 string');
+                    res.setHeader("Content-Type","multipart/form-data");
+                    //res.setHeader('Content-Type', 'multipart/form-data; boundary='+form.getBoundary());
+                    //res.setHeader('Content-Type', 'text/plain');
+                    form.pipe(res)
+                    //res.send(form)
+                    // respond to client
                     client.close()
                 })
             }
             else
             {
-                // respond to client
-                res.setHeader("Content-Type","application/json");
+                
                 res.send(returnRes)
                 client.close()
             }
